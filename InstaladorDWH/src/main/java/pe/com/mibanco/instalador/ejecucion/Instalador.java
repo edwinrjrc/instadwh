@@ -145,7 +145,13 @@ public class Instalador {
 
 	private void descomprimirComponentes() throws InstaladorException {
 		String nomArchivo = "CASO-" + numcaso + "_COMPONENTES_V" + verinsta + ".0.zip";
+		log.info("Descomprimiendo componente de instalacion "+nomArchivo);
 		File archivoComprimido = new File(nomArchivo);
+		descomprimirArchivo(archivoComprimido);
+		
+		nomArchivo = "CASO-" + numcaso + "_REVERSA_V" + verrever + ".0.zip";
+		log.info("Descomprimiendo componente de reversa "+nomArchivo);
+		archivoComprimido = new File(nomArchivo);
 		descomprimirArchivo(archivoComprimido);
 	}
 
@@ -155,14 +161,14 @@ public class Instalador {
 			String directorioZip = prop.getProperty("instalador.dwh.fuente");
 			directorioZip = directorioZip + File.separator + numcaso + File.separator;
 			zis = new ZipInputStream(new FileInputStream(directorioZip + File.separator + archivoComprimido));
-
 			ZipEntry salida;
 
 			while (null != (salida = zis.getNextEntry())) {
 				if (salida.isDirectory()) {
 					File d = new File(directorioZip + salida.getName());
-					if (!d.exists())
+					if (!d.exists()) {
 						d.mkdirs();
+					}
 				} else {
 					FileOutputStream fos = new FileOutputStream(directorioZip + salida.getName());
 					int leer;
@@ -170,6 +176,7 @@ public class Instalador {
 					while (0 < (leer = zis.read(buffer))) {
 						fos.write(buffer, 0, leer);
 					}
+					fos.flush();
 					fos.close();
 				}
 			}
