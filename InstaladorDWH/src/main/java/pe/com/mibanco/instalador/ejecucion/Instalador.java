@@ -18,6 +18,7 @@ import java.util.zip.ZipInputStream;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.util.FileUtils;
 
 import com.jcraft.jsch.Channel;
 import com.jcraft.jsch.ChannelExec;
@@ -43,6 +44,10 @@ public class Instalador {
 	private String verrever = "";
 	private File fileprop = null;
 	Properties prop = new Properties();
+	String componentesInstalacion = "";
+	String componentesReversa = "";
+	boolean existeKettlers = false;
+	boolean existeScriptBd = false;
 
 	public Instalador(String numcaso, String verinsta, String verrever, String arcpropi) throws InstaladorException {
 		try {
@@ -147,20 +152,24 @@ public class Instalador {
 		String nomArchivo = "CASO-" + numcaso + "_COMPONENTES_V" + verinsta + ".0.zip";
 		log.info("Descomprimiendo componente de instalacion "+nomArchivo);
 		File archivoComprimido = new File(nomArchivo);
-		descomprimirArchivo(archivoComprimido);
+		componentesInstalacion = descomprimirArchivo(archivoComprimido);
+		log.info("Componentes Instalacion ::"+componentesInstalacion);
 		
 		nomArchivo = "CASO-" + numcaso + "_REVERSA_V" + verrever + ".0.zip";
 		log.info("Descomprimiendo componente de reversa "+nomArchivo);
 		archivoComprimido = new File(nomArchivo);
-		descomprimirArchivo(archivoComprimido);
+		componentesReversa = descomprimirArchivo(archivoComprimido);
+		log.info("Componentes reversa ::"+componentesReversa);
 	}
 
-	private void descomprimirArchivo(File archivoComprimido) throws InstaladorException {
+	private String descomprimirArchivo(File archivoComprimido) throws InstaladorException {
 		ZipInputStream zis = null;
+		String rutaArchivo = null;
 		try {
 			String directorioZip = prop.getProperty("instalador.dwh.fuente");
 			directorioZip = directorioZip + File.separator + numcaso + File.separator;
-			zis = new ZipInputStream(new FileInputStream(directorioZip + File.separator + archivoComprimido));
+			rutaArchivo = directorioZip + File.separator + archivoComprimido;
+			zis = new ZipInputStream(new FileInputStream(rutaArchivo));
 			ZipEntry salida;
 
 			while (null != (salida = zis.getNextEntry())) {
@@ -180,6 +189,8 @@ public class Instalador {
 					fos.close();
 				}
 			}
+			int ultimoPunto = StringUtils.lastIndexOf(rutaArchivo, ".");
+			return StringUtils.substring(rutaArchivo, 0, ultimoPunto);
 		} catch (FileNotFoundException e) {
 			throw new InstaladorException(e.getMessage(), e);
 		} catch (IOException e) {
@@ -188,16 +199,68 @@ public class Instalador {
 			try {
 				if (zis != null) {
 					zis.closeEntry();
+					zis.close();
 				}
 			} catch (IOException e) {
 				throw new InstaladorException(e.getMessage(), e);
 			}
 		}
-
 	}
 
 	public void validacion() throws InstaladorException {
 		descomprimirComponentes();
+		validaComponentes();
+	}
+
+	private void validaComponentes() {
+		validaKettlers();
+		validarScriptBd();
+	}
+
+	private void validarScriptBd() {
+		String scriptBdParam = prop.getProperty("instalador.dwh.ruta.scriptbd");
+		scriptBdParam = StringUtils.replace(scriptBdParam, "-", File.separator); 
+		String rutaScriptBd = componentesInstalacion + File.separator + scriptBdParam;
+		log.debug("ruta script bd ::"+rutaScriptBd);
+		File ruta = new File(rutaScriptBd);
+		File[] archivosDentro = ruta.listFiles();
+		log.debug("archivos dentro ::"+archivosDentro.length);
+		for (File file : archivosDentro) {
+			if (file.isDirectory()) {
+				File[] archivos2 = file.listFiles();
+				for (File file2 : archivos2) {
+					if (file2.isFile()) {
+						String extension = FileUtils.getFileExtension(file2);
+						log.debug("Extension archivo ::"+extension);
+						existeScriptBd = ("sql".equalsIgnoreCase(extension));
+						if (!existeScriptBd) {
+							break;
+						}
+					}
+				}
+			}
+			else if (file.isFile()) {
+				String extension = FileUtils.getFileExtension(file);
+				log.debug("Extension archivo ::"+extension);
+				existeScriptBd = ("sql".equalsIgnoreCase(extension));
+				if (!existeScriptBd) {
+					break;
+				}
+			}
+		}
+		log.info("Validacion de Script BD");
+		log.info("Existe Script BD :: "+(existeScriptBd?"Si":"No"));
+	}
+
+	private void validaKettlers() {
+		String kettlersParam = prop.getProperty("instalador.dwh.ruta.kettlers");
+		kettlersParam = StringUtils.replace(kettlersParam, "-", File.separator); 
+		String rutaKettlers = componentesInstalacion + File.separator + kettlersParam;
+		log.debug("ruta kettlers ::"+rutaKettlers);
+		File ruta = new File(rutaKettlers);
+		this.existeKettlers = (ruta.listFiles().length > 0);
+		log.info("Validacion de Kettlers");
+		log.info("Existe kettlers :: "+(existeKettlers?"Si":"No"));
 	}
 
 	public void ejecutar() throws InstaladorException {
