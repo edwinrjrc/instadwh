@@ -25,4 +25,16 @@ public class Constantes {
 	 * Parametro ruta y nombre de archivo de propiedades
 	 */
 	public final static String PARAM_AP = "-ap";
+	/**
+	 * Parametro ruta y nombre de archivo de propiedades
+	 */
+	public final static String PARAM_AC = "-ac";
+	/**
+	 * Parametro ruta y nombre de archivo de propiedades
+	 */
+	public final static String PARAM_AM = "-am";
+	/**
+	 * Cantidad de segundos por defecto para timeout
+	 */
+	public final static long DEFAULT_TIMEOUT_SECONDS = 100;
 }

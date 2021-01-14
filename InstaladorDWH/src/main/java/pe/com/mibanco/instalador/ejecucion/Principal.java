@@ -27,6 +27,8 @@ public class Principal {
 			String verinsta = "";
 			String verrever = "";
 			String fileprop = null;
+			String ambiente = "";
+			String acciones = "";
 			
 			int param = 0;
 			
@@ -44,6 +46,12 @@ public class Principal {
 					else if (Constantes.PARAM_AP.equals(args[param])) {
 						fileprop = args[param+1];
 					}
+					else if (Constantes.PARAM_AC.equals(args[param])) {
+						acciones = args[param+1];
+					}
+					else if (Constantes.PARAM_AM.equals(args[param])) {
+						ambiente = args[param+1];
+					}
 					param += 2;
 				}
 			}
@@ -51,7 +59,7 @@ public class Principal {
 				throw new InstaladorException("No se enviaron los parametros necesarios para ejecutar el instalador");
 			}
 			
-			Instalador instalador = new Instalador(numcaso, verinsta, verrever, fileprop);
+			Instalador instalador = new Instalador(numcaso, verinsta, verrever, fileprop, ambiente, acciones);
 			instalador.ejecutar();
 		} catch (InstaladorException e) {
 			log.error(e.getMessage(),e);
