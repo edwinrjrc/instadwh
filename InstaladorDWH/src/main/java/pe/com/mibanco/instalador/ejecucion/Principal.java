@@ -7,7 +7,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import pe.com.mibanco.instalador.excepcion.InstaladorException;
-import pe.com.mibanco.instalador.util.Constantes;
 
 /**
  * @author Edwin
@@ -22,7 +21,7 @@ public class Principal {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		try {
+		/*try {
 			String numcaso = "";
 			String verinsta = "";
 			String verrever = "";
@@ -63,6 +62,12 @@ public class Principal {
 			instalador.ejecutar();
 		} catch (InstaladorException e) {
 			log.error(e.getMessage(),e);
+		}*/
+		try {
+			Instalador instalador = new Instalador();
+		} catch (InstaladorException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
 

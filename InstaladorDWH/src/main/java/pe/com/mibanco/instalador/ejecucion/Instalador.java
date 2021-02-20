@@ -6,10 +6,12 @@ package pe.com.mibanco.instalador.ejecucion;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.Console;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -19,8 +21,11 @@ import java.net.SocketException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
@@ -55,12 +60,13 @@ import oracle.dbtools.raptor.newscriptrunner.ScriptExecutor;
 import oracle.dbtools.raptor.newscriptrunner.ScriptRunnerContext;
 import pe.com.mibanco.instalador.excepcion.InstaladorException;
 import pe.com.mibanco.instalador.util.Constantes;
+import pe.com.mibanco.instalador.util.FiltrarSql;
 
 /**
  * @author Edwin
  *
  */
-public class Instalador extends Thread implements Runnable{
+public class Instalador extends Thread implements Runnable {
 
 	private static final Logger log = LogManager.getLogger(Instalador.class);
 
@@ -79,14 +85,18 @@ public class Instalador extends Thread implements Runnable{
 	private String verrever = "";
 	private String ambiente = "";
 	private String acciones = "";
+	private String rutaArchivosParametros = "";
 	private File fileprop = null;
 	Properties prop = new Properties();
 	String componentesInstalacion = "";
 	String componentesReversa = "";
 	boolean existeKettlers = false;
 	boolean existeScriptBd = false;
+	boolean requiereGrants = false;
+	Console miConsola = null;
 
-	public Instalador(String numcaso, String verinsta, String verrever, String arcpropi, String ambiente, String acciones) throws InstaladorException {
+	public Instalador(String numcaso, String verinsta, String verrever, String arcpropi, String ambiente,
+			String acciones) throws InstaladorException {
 		try {
 			this.numcaso = numcaso;
 			this.verinsta = verinsta;
@@ -101,6 +111,81 @@ public class Instalador extends Thread implements Runnable{
 		} catch (IOException e) {
 			throw new InstaladorException(e.getMessage(), e);
 		}
+	}
+
+	public Instalador() throws InstaladorException {
+		try {
+			miConsola = System.console();
+
+			//solicitarParametros();
+			solicitarParametros2();
+
+			fileprop = new File(rutaArchivosParametros + File.separator + "instalacion.properties");
+			InputStream is = new FileInputStream(fileprop);
+			prop.load(is);
+
+			validacion();
+			instalacion();
+		} catch (FileNotFoundException e) {
+			throw new InstaladorException(e.getMessage(), e);
+		} catch (InstaladorException e) {
+			throw new InstaladorException(e.getMessage(), e);
+		} catch (IOException e) {
+			throw new InstaladorException(e.getMessage(), e);
+		}
+	}
+
+	private void solicitarParametros() throws InstaladorException {
+		log.info("Por favor proporcione los parametros");
+
+		numcaso = miConsola.readLine("Numero de Caso: ");
+		verinsta = miConsola.readLine("Numero de version de instalacion: ");
+		verrever = miConsola.readLine("Numero de version de reversa: ");
+		ambiente = miConsola.readLine("Especifique el ambiente donde esta instalando[desa][qa]: ");
+		rutaArchivosParametros = miConsola.readLine("Ruta del archivo de parametros: ");
+
+		log.info("Parametros Ingresados...");
+		log.info("Numero de caso :" + numcaso);
+		log.info("Numero de version de instalacion :" + verinsta);
+		log.info("Numero de version de reversa :" + verrever);
+		log.info("Ambiente de instalacion :" + ambiente);
+
+		if (StringUtils.isBlank(numcaso)) {
+			throw new InstaladorException("Numero de caso no se ha especificado");
+		} else if (StringUtils.isBlank(verinsta)) {
+			throw new InstaladorException("Numero de version de instalacion no se ha especificado");
+		} else if (StringUtils.isBlank(verrever)) {
+			throw new InstaladorException("Numero de version de reversa no se ha especificado");
+		} else if (StringUtils.isBlank(ambiente)) {
+			throw new InstaladorException("No se ha especificado el ambiente donde se realizara la instalacion");
+		} else if (StringUtils.isBlank(rutaArchivosParametros)) {
+			throw new InstaladorException("No se ha especificado la ruta del archivo de propiedades");
+		} else if (validaArchivoInstalacion(rutaArchivosParametros)) {
+			throw new InstaladorException("No encontro el archivo instalacion.properties en la ruta especificada");
+		}
+	}
+	
+	private void solicitarParametros2() throws InstaladorException {
+		log.info("Por favor proporcione los parametros");
+
+		numcaso = "17231";
+		verinsta = "14";
+		verrever = "7";
+		ambiente = "desa";
+		rutaArchivosParametros = "C:";
+
+		log.info("Parametros Ingresados...");
+		log.info("Numero de caso :" + numcaso);
+		log.info("Numero de version de instalacion :" + verinsta);
+		log.info("Numero de version de reversa :" + verrever);
+		log.info("Ambiente de instalacion :" + ambiente);
+
+	}
+
+	private boolean validaArchivoInstalacion(String ruta) {
+		String rutaArchivo = ruta + File.separator + "instalacion.properties";
+		File archivoFile = new File(rutaArchivo);
+		return !archivoFile.exists();
 	}
 
 	private void conectarConServidor2() throws InstaladorException {
@@ -218,7 +303,7 @@ public class Instalador extends Thread implements Runnable{
 		String nomArchivo = this.obtenerNombreCarpetaComponenteInstalacion() + ".zip";
 		return nomArchivo;
 	}
-	
+
 	private String obtenerNombreCarpetaComponenteInstalacion() {
 		String nomArchivo = "CASO-" + numcaso + "_COMPONENTES_V" + verinsta + ".0";
 		return nomArchivo;
@@ -329,11 +414,6 @@ public class Instalador extends Thread implements Runnable{
 		log.info("Existe kettlers :: " + (existeKettlers ? "Si" : "No"));
 	}
 
-	public void ejecutar() throws InstaladorException {
-		// validacion();
-		instalacion();
-	}
-
 	private void instalacion() throws InstaladorException {
 		if (existeKettlers && false) {
 			instalarAplicacion();
@@ -344,27 +424,80 @@ public class Instalador extends Thread implements Runnable{
 	}
 
 	private void instalarBd() {
-		determinaBd();
-		
+		List<String> rutasSQL = determinaBd();
 	}
 
-	private void determinaBd() {
-		String fuentes = prop.getProperty("instalador.dwh.ruta.fuente");
-		fuentes = fuentes + File.separator + this.numcaso;
-		fuentes = fuentes + File.separator + this.obtenerNombreComponenteInstalacion();
-		
-		String rutaScriptBd = fuentes + File.separator;
-		rutaScriptBd = rutaScriptBd + File.separator + "Componentes";
-		rutaScriptBd = rutaScriptBd + File.separator + "00_ScriptsBD";
-		
-		File directorioFuentes = new File (rutaScriptBd);
+	private List<String> determinaBd() {
+		String scriptBdParam = prop.getProperty("instalador.dwh.ruta.scriptbd");
+		scriptBdParam = StringUtils.replace(scriptBdParam, "-", File.separator);
+		String rutaScriptBd = componentesInstalacion + File.separator + scriptBdParam;
+		String archivosSQL = rutaScriptBd;
+		List<String> rutasSQL = new ArrayList<>();
+
+		log.debug("Ruta de archivos BD :" + rutaScriptBd);
+
+		File directorioFuentes = new File(rutaScriptBd);
 		File[] listadodirectorios = directorioFuentes.listFiles();
+		int numBds = listadodirectorios.length;
+		Map<String,Object>[] bdsArreglo = new Map[numBds];
+		//Map<String,Object> bds = new HashMap<String,Object>();
+		int i = 0;
+		int carpetas = 0;
+		for (File fileBd : listadodirectorios) {
+			archivosSQL = rutaScriptBd;
+			if (fileBd.isDirectory()) {
+				String nomBD = fileBd.getName();
+				bdsArreglo[i] = new HashMap<String,Object>();
+				bdsArreglo[i].put("nombreBd", nomBD);
+				
+				archivosSQL = archivosSQL + File.separator + nomBD;
+
+				FilenameFilter filterFiles = new FiltrarSql();
+				File[] salida1 = fileBd.listFiles(filterFiles);
+				log.debug("BD ::" + nomBD);
+				if (salida1.length == 0) {
+					log.debug("No Existen sql");
+					
+					bdsArreglo[i].put("tieneSQL", "NO");
+
+					salida1 = fileBd.listFiles();
+					for (File carpeta : salida1) {
+						
+						if (carpeta.isDirectory()) {
+							log.debug("carpeta ::" + carpeta.getName());
+							carpetas++;
+						} else {
+							log.debug("Archivo ::" + carpeta.getName());
+						}
+						
+						rutasSQL.add(archivosSQL + File.separator + carpeta.getName());
+					}
+					if (carpetas > 1) {
+						bdsArreglo[i].put("tiene2Carpetas", "SI");
+						this.requiereGrants = true;
+					}
+					else {
+						bdsArreglo[i].put("tiene2Carpetas", "NO");
+					}
+				}
+				else {
+					bdsArreglo[i].put("tieneSQL", "SI");
+					bdsArreglo[i].put("tiene2Carpetas", "NO");
+					rutasSQL.add(archivosSQL);
+				}
+			}
+			i++;
+		}
+		log.info("numero de carpetas en script bd::" + carpetas);
+		
+		return rutasSQL;
 	}
 
 	private void instalarBd3() throws InstaladorException {
 		Connection conn = null;
 		try {
-			String jdbcUrl = "jdbc:oracle:thin:@//"+prop.getProperty("instalador.dwh.bd.dwhdesa.host")+":1521/DWHDESA";
+			String jdbcUrl = "jdbc:oracle:thin:@//" + prop.getProperty("instalador.dwh.bd.dwhdesa.host")
+					+ ":1521/DWHDESA";
 			conn = DriverManager.getConnection("jdbc:oracle:thin:@//desk1:1521/DWHDESA", "DWHADM", "admin");
 			conn.setAutoCommit(false);
 
@@ -388,7 +521,8 @@ public class Instalador extends Thread implements Runnable{
 			// # run a whole file
 			// adjust the path as it needs to be absolute
 			String folder = sqlcl.getDirectory();
-			log.info(folder);
+			log.debug(folder);
+
 			sqlcl.setDirectory("D:\\casos\\17231\\CASO-17231_COMPONENTES_V14.0\\Componentes\\00_ScriptsBD\\DWHPROD");
 			sqlcl.setStmt("Script_00_CASO-17231_Principal.sql");
 
@@ -414,9 +548,9 @@ public class Instalador extends Thread implements Runnable{
 
 	private void instalarBd2() throws InstaladorException {
 		try {
-			ProcessBuilder builder = new ProcessBuilder("cmd.exe", "/c", "d:", 
-					"\"cd d:\\casos\\17231\\CASO-17231_COMPONENTES_V14.0\\Componentes\\00_ScriptsBD\\DWHPROD\" end", "sqlplus",
-					"dwhadm/admin@DWHDESA", "@Script_00_CASO-17231_Principal.sql");
+			ProcessBuilder builder = new ProcessBuilder("cmd.exe", "/c", "d:",
+					"\"cd d:\\casos\\17231\\CASO-17231_COMPONENTES_V14.0\\Componentes\\00_ScriptsBD\\DWHPROD\" end",
+					"sqlplus", "dwhadm/admin@DWHDESA", "@Script_00_CASO-17231_Principal.sql");
 			builder.redirectErrorStream(true);
 			log.info("1");
 			Process p = builder.start();
@@ -437,21 +571,22 @@ public class Instalador extends Thread implements Runnable{
 			throw new InstaladorException(e.getMessage(), e);
 		}
 	}
-	
+
 	private void instalarBd4() throws InstaladorException {
 		try {
-			Process p = Runtime.getRuntime()
-					.exec("cmd /c d: && cd d:\\casos\\17231\\CASO-17231_COMPONENTES_V14.0\\Componentes\\00_ScriptsBD\\DWHPROD && dir");
+			Process p = Runtime.getRuntime().exec(
+					"cmd /c d: && cd d:\\casos\\17231\\CASO-17231_COMPONENTES_V14.0\\Componentes\\00_ScriptsBD\\DWHPROD && dir");
 
 		} catch (IOException e) {
 			throw new InstaladorException(e.getMessage(), e);
 		}
-		
+
 	}
-	
+
 	private void instalarBd5() throws InstaladorException {
 		try {
-			CommandLine cmdLine = CommandLine.parse("cmd /c d: && cd d:\\casos\\17231\\CASO-17231_COMPONENTES_V14.0\\Componentes\\00_ScriptsBD\\DWHPROD && sqlplus dwhadm/admin@DWHDESA && @Script_00_CASO-17231_Principal.sql");
+			CommandLine cmdLine = CommandLine.parse(
+					"cmd /c d: && cd d:\\casos\\17231\\CASO-17231_COMPONENTES_V14.0\\Componentes\\00_ScriptsBD\\DWHPROD && sqlplus dwhadm/admin@DWHDESA && @Script_00_CASO-17231_Principal.sql");
 			DefaultExecutor executor = new DefaultExecutor();
 			int exitValue = executor.execute(cmdLine);
 		} catch (ExecuteException e) {
@@ -635,11 +770,11 @@ public class Instalador extends Thread implements Runnable{
 		}
 		return mayor;
 	}
-	
+
 	@Override
 	public void run() {
 		// TODO Auto-generated method stub
 		super.run();
 	}
-	
+
 }
